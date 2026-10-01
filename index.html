@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>우주 탐험! 행성 기억력 게임</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tone.js for audio -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- Canvas Confetti for celebration effect -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Jua', sans-serif;
+            background-color: #0b0f19;
+            overflow-x: hidden;
+            touch-action: manipulation;
+        }
+
+        /* Starry Background */
+        .stars {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1;
+            background: #0b0f19;
+        }
+        .star {
+            position: absolute;
+            background-color: white;
+            border-radius: 50%;
+            animation: twinkle infinite alternate;
+        }
+        @keyframes twinkle {
+            0% { opacity: 0.2; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1.2); }
+        }
+
+        /* 3D Flip */
+        .perspective-1000 { perspective: 1000px; }
+        .transform-style-3d { transform-style: preserve-3d; }
+        .backface-hidden {
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+        .rotate-y-180 { transform: rotateY(180deg); }
+        .card-inner { transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1); }
+
+        /* Effects */
+        .matched-glow {
+            box-shadow: 0 0 15px 5px rgba(74, 222, 128, 0.6);
+            animation: pulse-green 1.5s infinite;
+        }
+        .selected-glow {
+            box-shadow: 0 0 15px 5px rgba(250, 204, 21, 0.8) !important;
+            border-color: #facc15 !important;
+            transform: scale(1.05);
+            z-index: 30;
+        }
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 10px 2px rgba(74, 222, 128, 0.4); }
+            50% { box-shadow: 0 0 20px 6px rgba(74, 222, 128, 0.8); }
+            100% { box-shadow: 0 0 10px 2px rgba(74, 222, 128, 0.4); }
+        }
+
+        /* Matching Item Styles */
+        .matching-item {
+            background-color: #1f2937;
+            border: 2px solid #374151;
+            border-radius: 0.75rem;
+            padding: 0.5rem;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            min-height: 60px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .matching-item:hover:not(.matched) {
+            border-color: #fbbf24;
+            transform: translateY(-2px);
+        }
+        @media (min-width: 640px) {
+            .matching-item { min-height: 80px; padding: 1rem; border-radius: 1rem; }
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+    </style>
+</head>
+<body class="text-white min-h-screen flex flex-col items-center p-4 relative">
+
+    <div class="stars" id="star-container"></div>
+
+    <div class="max-w-6xl w-full bg-gray-900/80 backdrop-blur-md rounded-3xl shadow-2xl border border-gray-700 p-6 sm:p-10 relative overflow-hidden mt-4 mb-20">
+        
+        <header class="text-center mb-8">
+            <h1 id="main-title" class="text-4xl sm:text-5xl text-yellow-300 drop-shadow-md mb-2">🚀 태양계 행성 기억력 게임 🌌</h1>
+            <p id="level-subtitle" class="text-xl sm:text-2xl text-blue-200">우주 탐험을 시작해 볼까요?</p>
+        </header>
+
+        <main id="main-content" class="w-full flex flex-col items-center justify-center min-h-[400px]">
+            
+            <!-- Screen 0: Start Screen -->
+            <div id="screen-start" class="flex flex-col items-center justify-center space-y-6 py-10 w-full">
+                <div class="w-32 h-32 animate-bounce">
+                    <svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-lg">
+                        <circle cx="50" cy="50" r="45" fill="#2196f3"/>
+                        <path d="M 20 40 Q 30 20 50 30 T 70 50 Q 80 80 50 80 T 20 40" fill="#4caf50"/>
+                        <ellipse cx="50" cy="50" rx="55" ry="10" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="4" transform="rotate(-15 50 50)"/>
+                    </svg>
+                </div>
+                <p id="start-desc" class="text-2xl text-center break-keep">태양계 행성 친구들을 만나러 가요!</p>
+                
+                <div class="flex gap-4 mt-4">
+                    <button id="btn-lang-ko" onclick="setLanguage('ko')" class="px-6 py-2 bg-blue-600 text-white rounded-full font-bold border-2 border-white shadow-lg transition">한국어</button>
+                    <button id="btn-lang-en" onclick="setLanguage('en')" class="px-6 py-2 bg-gray-700 text-gray-300 rounded-full font-bold border-2 border-transparent shadow-lg transition">English</button>
+                </div>
+
+                <button id="btn-start" onclick="startGame()" class="mt-6 px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-400 hover:to-purple-500 text-white text-3xl rounded-full shadow-lg transform transition hover:scale-105 active:scale-95">
+                    우주 여행 출발!
+                </button>
+            </div>
+
+            <!-- Screen: Level 0 (Solar System Order) -->
+            <div id="screen-level0" class="hidden flex-col items-center w-full">
+                <div class="w-full bg-gray-900/80 rounded-2xl p-4 mb-6 shadow-inner border border-gray-700 relative overflow-hidden">
+                    <p class="text-xl text-center mb-4 text-gray-300">행성을 클릭해서 이름을 확인해 보세요.</p>
+                    <div class="relative w-full h-80 flex items-center overflow-x-auto overflow-y-hidden pl-4 pr-10 pt-10" id="level0-container">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Screen: Level 1 (Learning) -->
+            <div id="screen-level1" class="hidden flex-col items-center w-full">
+                <div class="w-full bg-gray-800 rounded-2xl p-4 sm:p-6 mb-6 shadow-inner">
+                    <p class="text-xl text-center mb-6 text-gray-300" id="lv1-desc">카드를 클릭해서 행성의 특징을 알아보세요.</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4" id="learning-grid">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Screen: Line Matching (Levels 2, 3) -->
+            <div id="screen-matching" class="hidden flex-col items-center w-full">
+                <div class="flex justify-between items-center w-full mb-4 px-2 sm:px-4">
+                    <div id="matching-info" class="text-xl sm:text-2xl text-yellow-300 drop-shadow-md">연결한 짝: 0</div>
+                    <div id="matching-desc" class="text-sm sm:text-lg text-gray-300">알맞은 짝을 순서대로 클릭하여 선을 연결하세요!</div>
+                </div>
+                <div id="matching-board" class="relative w-full max-w-5xl bg-gray-900/90 rounded-3xl shadow-2xl border border-gray-600 p-4 sm:p-8 min-h-[500px] select-none">
+                    <svg id="matching-svg" class="absolute inset-0 w-full h-full pointer-events-none z-10"></svg>
+                    <div id="matching-grid" class="relative z-20 w-full h-full grid gap-4 sm:gap-8">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Screen: Level 4 (Multiple Choice) -->
+            <div id="screen-level4" class="hidden flex-col items-center w-full">
+                <div class="flex justify-between items-center w-full mb-4 px-4">
+                    <div id="mc-info" class="text-2xl text-yellow-300">진행: 0 / 8</div>
+                    <div id="mc-desc" class="text-xl text-gray-300">알맞은 이름을 고르세요!</div>
+                </div>
+                <div class="bg-gray-800 rounded-3xl p-8 border-2 border-indigo-500 w-full max-w-2xl flex flex-col items-center">
+                    <div id="mc-image-container" class="w-40 h-40 sm:w-48 sm:h-48 mb-8 drop-shadow-xl flex items-center justify-center">
+                        <!-- Image populated by JS -->
+                    </div>
+                    <div id="mc-options" class="grid grid-cols-2 gap-4 w-full">
+                        <!-- Buttons populated by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Screen: Level 5 (Dropdown) -->
+            <div id="screen-level5" class="hidden flex-col items-center w-full">
+                <div class="flex justify-between items-center w-full mb-4 px-4">
+                    <div id="dd-info" class="text-2xl text-yellow-300">진행: 0 / 8</div>
+                    <div id="dd-desc" class="text-xl text-gray-300">알맞은 이름과 특징을 고르세요!</div>
+                </div>
+                <div class="bg-gray-800 rounded-3xl p-6 sm:p-10 border-2 border-indigo-500 w-full max-w-3xl flex flex-col items-center">
+                    <div id="dd-image-container" class="w-32 h-32 sm:w-40 sm:h-40 mb-6 drop-shadow-xl flex items-center justify-center">
+                        <!-- Image populated by JS -->
+                    </div>
+                    
+                    <div class="w-full flex flex-col gap-4 mb-8">
+                        <div>
+                            <label for="dd-select-name" class="block text-blue-300 text-lg mb-2 ml-2 font-bold" id="label-dd-name">1. 행성 이름</label>
+                            <select id="dd-select-name" class="w-full bg-gray-700 text-white text-xl p-4 rounded-xl border-2 border-gray-600 focus:border-blue-400 outline-none appearance-none cursor-pointer">
+                                <!-- Populated by JS -->
+                            </select>
+                        </div>
+                        <div>
+                            <label for="dd-select-feature" class="block text-green-300 text-lg mb-2 ml-2 font-bold" id="label-dd-feature">2. 행성 특징</label>
+                            <select id="dd-select-feature" class="w-full bg-gray-700 text-white text-base sm:text-lg p-4 rounded-xl border-2 border-gray-600 focus:border-green-400 outline-none appearance-none cursor-pointer">
+                                <!-- Populated by JS -->
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <button id="btn-dd-check" onclick="checkDropdownAnswer()" class="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-2xl font-bold rounded-2xl shadow-lg transform transition active:scale-95">
+                        정답 확인하기
+                    </button>
+                </div>
+            </div>
+
+            <!-- Screen: Game Board (Levels 6, 7, 8) -->
+            <div id="screen-game" class="hidden flex-col items-center w-full">
+                <div class="flex justify-between items-center w-full mb-4 px-4">
+                    <div id="game-info" class="text-2xl text-yellow-300">맞춘 짝: 0 / 8</div>
+                    <div id="game-moves" class="text-xl text-gray-300">시도 횟수: 0</div>
+                </div>
+                <div id="card-grid" class="grid grid-cols-4 gap-2 sm:gap-4 w-full aspect-square max-w-2xl mx-auto perspective-1000">
+                    <!-- Cards populated by JS -->
+                </div>
+            </div>
+
+            <!-- Screen: Level 9 (Drag and Drop Assembly) -->
+            <div id="screen-level9" class="hidden flex-col items-center w-full">
+                <div class="flex flex-col items-center w-full mb-4 px-2">
+                    <div id="lv9-info" class="text-2xl text-yellow-300 drop-shadow-md mb-2">진행: 0 / 8</div>
+                    <div id="lv9-desc" class="text-lg sm:text-xl text-gray-300 text-center break-keep">행성 이미지를 알맞은 위치로 드래그하세요!</div>
+                </div>
+                
+                <div class="w-full bg-gray-900/80 rounded-2xl p-4 mb-6 shadow-inner border border-gray-700 relative overflow-hidden">
+                    <div class="relative w-full h-[380px] flex items-center overflow-x-auto overflow-y-hidden pl-4 pr-10" id="lv9-board">
+                        <!-- Drop zones populated by JS -->
+                    </div>
+                </div>
+
+                <div class="w-full bg-gray-800 rounded-2xl p-6 shadow-inner border border-gray-600 min-h-[150px]">
+                    <div id="lv9-pool" class="flex flex-wrap justify-center items-center gap-4">
+                        <!-- Draggable items populated by JS -->
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <div id="bottom-nav" class="hidden fixed bottom-0 left-0 w-full bg-gray-900/95 border-t border-gray-700 p-4 z-40 flex justify-center gap-4 shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
+        <button id="btn-prev" onclick="goPrev()" class="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white text-lg sm:text-xl font-bold rounded-full shadow-lg transform transition active:scale-95 flex-1 max-w-[200px]">
+            ⬅ 이전 단계
+        </button>
+        <button id="btn-next" onclick="goNext()" class="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white text-lg sm:text-xl font-bold rounded-full shadow-lg transform transition active:scale-95 flex-1 max-w-[200px]">
+            다음 단계 ➡️
+        </button>
+    </div>
+
+    <!-- Message Modal -->
+    <div id="message-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+        <div class="bg-gray-800 border-4 border-indigo-500 p-8 rounded-3xl shadow-2xl text-center max-w-md w-full transform scale-95 opacity-0 transition-all duration-300" id="modal-content">
+            <h2 id="modal-title" class="text-4xl text-yellow-400 mb-4 drop-shadow-md">성공!</h2>
+            <p id="modal-text" class="text-2xl text-white mb-8 break-keep">모든 행성을 맞추었어요!</p>
+            <button id="modal-btn" class="px-8 py-3 bg-indigo-500 hover:bg-indigo-400 text-white text-2xl rounded-full shadow-lg w-full font-bold">
+                확인
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const uiText = {
+            ko: {
+                mainTitle: "🚀 태양계 행성 기억력 게임 🌌", subTitleStart: "우주 탐험을 시작해 볼까요?",
+                descStart: "태양계 행성 친구들을 만나러 가요!", btnStart: "우주 여행 출발!",
+                btnPrev: "⬅ 이전 단계", btnNext: "다음 단계 ➡️", btnHome: "처음으로 🏠",
+                sun: "태양", lv0: "0단계: 태양계 행성의 순서 알아보기", lv0Desc: "행성을 클릭해서 이름을 확인해 보세요.",
+                lv1: "1단계: 행성 알아보기 🔭", lv1Desc: "카드를 클릭해서 행성의 특징을 알아보세요.",
+                lv2: "2단계: 이미지 ↔ 이름 짝 맞추기 ✏️", lv3: "3단계: 이미지 ↔ 이름 ↔ 특징 짝 맞추기 ✏️",
+                matchInfo: "연결한 짝", matchDesc: "알맞은 짝을 차례대로 클릭하여 선을 연결하세요!",
+                lv4: "4단계: 알맞은 이름 고르기 💡", lv4Desc: "알맞은 이름을 고르세요!",
+                lv5: "5단계: 특징과 이름 찾기 🔍", lv5Desc: "알맞은 이름과 특징을 고르세요!",
+                ddNameLabel: "1. 행성 이름", ddNameDef: "행성 이름을 선택하세요",
+                ddFeatLabel: "2. 행성 특징", ddFeatDef: "행성 특징을 선택하세요", btnCheck: "정답 확인하기",
+                lv6: "6단계: 이미지 ↔ 이름 메모리 게임", lv7: "7단계: 특징 ↔ 이름 메모리 게임", lv8: "8단계: 이미지 ↔ 특징 메모리 게임",
+                gameInfo: "맞춘 짝", gameMoves: "시도 횟수",
+                lv9: "9단계: 태양계 행성 완성하기 🧩",
+                lv9Ph1: "아래에서 행성 이미지를 누르고, 알맞은 빈칸을 클릭하세요!",
+                lv9Ph2: "아래에서 행성 이름을 누르고, 위쪽 빈칸을 클릭하세요!",
+                lv9Ph3: "아래에서 행성 특징을 누르고, 아래쪽 빈칸을 클릭하세요!",
+                successTitle: "성공!", successText: "모든 행성을 맞추었어요!", btnConfirm: "확인",
+                waitTitle: "잠깐만요!", waitText: "행성의 이름과 특징을<br>모두 선택해 주세요!",
+                clearLvTitle: "단계 완료! ✨", clearLvText: "대단해요!<br>다음 단계로 도전할까요?",
+                clearAllTitle: "🏆 우주 탐험 성공! 🏆", clearAllText: "축하합니다!<br>태양계 행성을 완벽하게 기억했어요!"
+            },
+            en: {
+                mainTitle: "🚀 Solar System Memory Game 🌌", subTitleStart: "Ready for space exploration?",
+                descStart: "Let's meet the planets of the solar system!", btnStart: "Start Space Travel!",
+                btnPrev: "⬅ Previous", btnNext: "Next ➡️", btnHome: "Home 🏠",
+                sun: "Sun", lv0: "Level 0: Order of Planets", lv0Desc: "Click on the planets to see their names.",
+                lv1: "Level 1: Learn the Planets 🔭", lv1Desc: "Click the cards to learn about their features.",
+                lv2: "Level 2: Match Image ↔ Name ✏️", lv3: "Level 3: Match Image ↔ Name ↔ Feature ✏️",
+                matchInfo: "Matched", matchDesc: "Click matching items in order to connect them!",
+                lv4: "Level 4: Choose the Correct Name 💡", lv4Desc: "Choose the correct name!",
+                lv5: "Level 5: Find Feature and Name 🔍", lv5Desc: "Choose the correct name and feature!",
+                ddNameLabel: "1. Planet Name", ddNameDef: "Select a planet name",
+                ddFeatLabel: "2. Planet Feature", ddFeatDef: "Select a planet feature", btnCheck: "Check Answer",
+                lv6: "Level 6: Image ↔ Name Memory Game", lv7: "Level 7: Feature ↔ Name Memory Game", lv8: "Level 8: Image ↔ Feature Memory Game",
+                gameInfo: "Matched", gameMoves: "Tries",
+                lv9: "Level 9: Complete the Solar System 🧩",
+                lv9Ph1: "Tap an image below, then tap the correct slot!",
+                lv9Ph2: "Tap a name below, then tap the top slot!",
+                lv9Ph3: "Tap a feature below, then tap the bottom slot!",
+                successTitle: "Success!", successText: "You matched all planets!", btnConfirm: "OK",
+                waitTitle: "Wait!", waitText: "Please select both<br>the name and feature!",
+                clearLvTitle: "Level Cleared! ✨", clearLvText: "Great job!<br>Ready for the next level?",
+                clearAllTitle: "🏆 Space Exploration Complete! 🏆", clearAllText: "Congratulations!<br>You've memorized the solar system perfectly!"
+            }
+        };
+
+        const planets = [
+            { id: 'mercury', name: {ko: '수성', en: 'Mercury'}, feature: {ko: '달처럼 표면에 충돌 구덩이가 많아요.', en: 'It has many impact craters on its surface like the moon.'}, svg: `<circle cx="50" cy="50" r="40" fill="#9e9e9e"/><circle cx="35" cy="35" r="8" fill="#757575"/><circle cx="60" cy="65" r="12" fill="#757575"/><circle cx="70" cy="40" r="6" fill="#757575"/><circle cx="30" cy="60" r="5" fill="#757575"/>` },
+            { id: 'venus', name: {ko: '금성', en: 'Venus'}, feature: {ko: '매우 두꺼운 공기로 덮여 있어요.', en: 'It is covered with a very thick atmosphere.'}, svg: `<circle cx="50" cy="50" r="40" fill="#f4b41a"/><path d="M 15 40 Q 30 20 50 40 T 85 40" stroke="#d48806" stroke-width="6" stroke-linecap="round" fill="none"/><path d="M 20 60 Q 40 80 60 60 T 80 60" stroke="#d48806" stroke-width="6" stroke-linecap="round" fill="none"/>` },
+            { id: 'earth', name: {ko: '지구', en: 'Earth'}, feature: {ko: '생물이 살아가기에 알맞은 환경이에요.', en: 'It has the right environment for living things.'}, svg: `<circle cx="50" cy="50" r="40" fill="#2196f3"/><path d="M 25 35 Q 35 15 55 25 T 70 45 Q 80 75 50 75 T 25 35" fill="#4caf50"/><path d="M 15 50 Q 20 60 30 55 T 40 65 Q 30 70 20 60" fill="#4caf50"/>` },
+            { id: 'mars', name: {ko: '화성', en: 'Mars'}, feature: {ko: '표면이 붉은색 암석과 흙으로 이루어져 있어요.', en: 'Its surface is made of red rocks and soil.'}, svg: `<circle cx="50" cy="50" r="40" fill="#e53935"/><path d="M 20 40 Q 30 30 45 45 T 75 40" fill="none" stroke="#c62828" stroke-width="8" stroke-linecap="round"/><path d="M 30 65 Q 50 55 60 70" fill="none" stroke="#c62828" stroke-width="6" stroke-linecap="round"/>` },
+            { id: 'jupiter', name: {ko: '목성', en: 'Jupiter'}, feature: {ko: '태양계에서 가장 크고 표면에 줄무늬가 있어요.', en: 'It is the largest planet in the solar system and has stripes.'}, svg: `<circle cx="50" cy="50" r="40" fill="#ffcc80"/><rect x="15" y="30" width="70" height="8" fill="#ffb74d"/><rect x="10" y="55" width="80" height="12" fill="#ff9800"/><rect x="20" y="75" width="60" height="6" fill="#ffb74d"/><circle cx="65" cy="45" r="7" fill="#e65100"/>` },
+            { id: 'saturn', name: {ko: '토성', en: 'Saturn'}, feature: {ko: '여러 겹으로 이루어진 크고 뚜렷한 고리가 있어요.', en: 'It has large, distinct rings made of many layers.'}, svg: `<ellipse cx="50" cy="50" rx="48" ry="12" fill="none" stroke="#fff8e1" stroke-width="8" transform="rotate(-20 50 50)"/><circle cx="50" cy="50" r="30" fill="#ffe082"/><ellipse cx="50" cy="50" rx="48" ry="12" fill="none" stroke="#ffecb3" stroke-width="3" transform="rotate(-20 50 50)"/>` },
+            { id: 'uranus', name: {ko: '천왕성', en: 'Uranus'}, feature: {ko: '연한 청록색을 띠고 얇은 고리가 있어요.', en: 'It has a light cyan color and thin rings.'}, svg: `<circle cx="50" cy="50" r="35" fill="#80deea"/><ellipse cx="50" cy="50" rx="45" ry="4" fill="none" stroke="#e0f7fa" stroke-width="2" transform="rotate(75 50 50)"/>` },
+            { id: 'neptune', name: {ko: '해왕성', en: 'Neptune'}, feature: {ko: '태양에서 가장 멀리 떨어져 있는 파란색 행성이에요.', en: 'It is a blue planet farthest from the Sun.'}, svg: `<circle cx="50" cy="50" r="38" fill="#1e88e5"/><path d="M 20 40 Q 50 30 80 40" fill="none" stroke="#1565c0" stroke-width="4"/><circle cx="65" cy="65" r="5" fill="#0d47a1"/>` }
+        ];
+
+        let synth;
+        let currentLevel = -1;
+        const maxLevel = 9;
+        let currentLang = 'ko';
+
+        function setLanguage(lang) {
+            currentLang = lang;
+            
+            // Toggle Language Buttons
+            if (lang === 'ko') {
+                document.getElementById('btn-lang-ko').className = "px-6 py-2 bg-blue-600 text-white rounded-full font-bold border-2 border-white shadow-lg transition";
+                document.getElementById('btn-lang-en').className = "px-6 py-2 bg-gray-700 text-gray-300 rounded-full font-bold border-2 border-transparent shadow-lg transition";
+            } else {
+                document.getElementById('btn-lang-en').className = "px-6 py-2 bg-blue-600 text-white rounded-full font-bold border-2 border-white shadow-lg transition";
+                document.getElementById('btn-lang-ko').className = "px-6 py-2 bg-gray-700 text-gray-300 rounded-full font-bold border-2 border-transparent shadow-lg transition";
+            }
+
+            // Update Global Texts
+            document.getElementById('main-title').innerText = uiText[lang].mainTitle;
+            document.getElementById('level-subtitle').innerText = currentLevel === -1 ? uiText[lang].subTitleStart : document.getElementById('level-subtitle').innerText;
+            document.getElementById('start-desc').innerHTML = uiText[lang].descStart;
+            document.getElementById('btn-start').innerText = uiText[lang].btnStart;
+            document.getElementById('btn-prev').innerText = uiText[lang].btnPrev;
+            document.getElementById('btn-next').innerText = currentLevel === maxLevel ? uiText[lang].btnHome : uiText[lang].btnNext;
+            document.getElementById('modal-btn').innerText = uiText[lang].btnConfirm;
+            
+            if (currentLevel !== -1) goToLevel(currentLevel); 
+        }
+
+        function playTTS(text) {
+            if (currentLang === 'en' && 'speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'en-US';
+                utterance.rate = 0.9;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        function initAudio() {
+            if(!synth) {
+                synth = new Tone.PolySynth(Tone.Synth, {
+                    oscillator: { type: "sine" },
+                    envelope: { attack: 0.05, decay: 0.1, sustain: 0.3, release: 1 }
+                }).toDestination();
+                synth.volume.value = -10;
+            }
+        }
+
+        function playSound(type) {
+            if(!synth) return;
+            const now = Tone.now();
+            if (type === 'flip' || type === 'click') synth.triggerAttackRelease("C5", "8n", now);
+            else if (type === 'match') synth.triggerAttackRelease(["C5", "E5", "G5"], "4n", now);
+            else if (type === 'fail') synth.triggerAttackRelease("C4", "8n", now);
+            else if (type === 'win') synth.triggerAttackRelease(["C5", "E5", "G5", "C6"], "2n", now);
+        }
+
+        function createStars() {
+            const container = document.getElementById('star-container');
+            for (let i = 0; i < 100; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                const size = Math.random() * 3 + 1;
+                star.style.width = size + 'px'; star.style.height = size + 'px';
+                star.style.top = Math.random() * 100 + '%'; star.style.left = Math.random() * 100 + '%';
+                star.style.animationDuration = (Math.random() * 3 + 1) + 's';
+                star.style.animationDelay = (Math.random() * 3) + 's';
+                container.appendChild(star);
+            }
+        }
+        createStars();
+
+        async function startGame() {
+            await Tone.start();
+            initAudio();
+            goToLevel(0);
+        }
+
+        function goPrev() { if (currentLevel >= 0) goToLevel(currentLevel - 1); }
+        function goNext() { if (currentLevel < maxLevel) goToLevel(currentLevel + 1); else goToLevel(-1); }
+
+        function hideAllScreens() {
+            const screens = ['screen-start', 'screen-level0', 'screen-level1', 'screen-matching', 'screen-level4', 'screen-level5', 'screen-game', 'screen-level9'];
+            screens.forEach(id => {
+                const el = document.getElementById(id);
+                if(el) { el.classList.add('hidden'); el.classList.remove('flex'); }
+            });
+        }
+
+        function goToLevel(level) {
+            currentLevel = level;
+            hideAllScreens();
+            
+            const navBar = document.getElementById('bottom-nav');
+            if (level === -1) {
+                navBar.classList.add('hidden'); navBar.classList.remove('flex');
+                document.getElementById('screen-start').classList.remove('hidden');
+                document.getElementById('screen-start').classList.add('flex');
+                document.getElementById('level-subtitle').innerText = uiText[currentLang].subTitleStart;
+                return;
+            }
+
+            navBar.classList.remove('hidden'); navBar.classList.add('flex');
+            document.getElementById('btn-prev').classList.toggle('invisible', level === 0);
+            document.getElementById('btn-next').innerHTML = level === maxLevel ? uiText[currentLang].btnHome : uiText[currentLang].btnNext;
+
+            if (level === 0) renderLevel0();
+            else if (level === 1) renderLevel1();
+            else if (level === 2 || level === 3) startMatchingGame(level);
+            else if (level === 4) startMultipleChoice();
+            else if (level === 5) startDropdownQuiz();
+            else if (level >= 6 && level <= 8) startMemoryGame(level);
+            else if (level === 9) startLevel9();
+        }
+
+        function renderLevel0() {
+            document.getElementById('level-subtitle').innerText = uiText[currentLang].lv0;
+            const screen = document.getElementById('screen-level0');
+            screen.classList.remove('hidden'); screen.classList.add('flex');
+            
+            const container = document.getElementById('level0-container');
+            container.innerHTML = '';
+            document.querySelector('#screen-level0 p').innerText = uiText[currentLang].lv0Desc;
+
+            // Sun
+            const sunEl = document.createElement('div');
+            sunEl.className = "flex-shrink-0 relative w-[250px] h-[250px] -ml-16 rounded-full flex items-center justify-center cursor-pointer mr-6";
+            sunEl.style.background = "radial-gradient(circle, #fff59d 0%, #fbc02d 40%, #e65100 100%)";
+            sunEl.style.boxShadow = "0 0 50px rgba(255, 165, 0, 0.8)";
+            sunEl.innerHTML = `<span id="label-sun" class="absolute top-1/4 right-8 opacity-0 transition-opacity text-white font-bold text-4xl drop-shadow-md">${uiText[currentLang].sun}</span>`;
+            sunEl.onclick = () => { playSound('flip'); document.getElementById('label-sun').classList.toggle('opacity-0'); playTTS(uiText[currentLang].sun); };
+            container.appendChild(sunEl);
+
+            const sizes = {
+                'mercury': 'w-8 h-8', 'venus': 'w-12 h-12', 'earth': 'w-14 h-14', 'mars': 'w-10 h-10',
+                'jupiter': 'w-32 h-32 ml-4', 'saturn': 'w-[160px] h-[160px] ml-4', 
+                'uranus': 'w-16 h-16 ml-2', 'neptune': 'w-16 h-16'
+            };
+
+            planets.forEach(item => {
+                const wrapper = document.createElement('div');
+                wrapper.className = `relative flex flex-col items-center justify-center cursor-pointer flex-shrink-0 mx-2 hover:-translate-y-2 transition-transform`;
+                
+                const s = sizes[item.id];
+                const parts = s.split(' ');
+                const w = parts[0], h = parts[1], ml = parts[2] || '';
+                
+                wrapper.innerHTML = `
+                    <div class="absolute -top-16 flex flex-col items-center">
+                        <span id="label-${item.id}" class="text-white font-bold text-lg sm:text-xl whitespace-nowrap mb-2 opacity-0 transition-opacity">${item.name[currentLang]}</span>
+                        <div class="h-10 border-l-2 border-dotted border-gray-400"></div>
+                    </div>
+                    <div class="${w} ${h} ${ml} drop-shadow-lg flex items-center justify-center">
+                        <svg viewBox="0 0 100 100" class="w-full h-full">${item.svg}</svg>
+                    </div>
+                `;
+                wrapper.onclick = () => { playSound('flip'); document.getElementById(`label-${item.id}`).classList.toggle('opacity-0'); playTTS(item.name[currentLang]); };
+                container.appendChild(wrapper);
+            });
+        }
+
+        function renderLevel1() {
+            document.getElementById('level-subtitle').innerText = uiText[currentLang].lv1;
+            const screen = document.getElementById('screen-level1');
+            screen.classList.remove('hidden'); screen.classList.add('flex');
+            document.getElementById('lv1-desc').innerText = uiText[currentLang].lv1Desc;
+            
+            const grid = document.getElementById('learning-grid');
+            grid.innerHTML = '';
+
+            planets.forEach(p => {
+                const card = document.createElement('div');
+                card.className = "relative w-full h-64 cursor-pointer transform-style-3d perspective-1000";
+                card.onclick = () => {
+                    playSound('flip');
+                    const inner = card.querySelector('.card-inner');
+                    const isFlipped = inner.style.transform === 'rotateY(180deg)';
+                    inner.style.transform = isFlipped ? '' : 'rotateY(180deg)';
+                    if (!isFlipped) playTTS(p.name[currentLang] + '. ' + p.feature[currentLang]);
+                };
+                
+                card.innerHTML = `
+                    <div class="card-inner w-full h-full transform-style-3d relative transition duration-500">
+                        <div class="absolute w-full h-full bg-gray-700 p-4 rounded-xl flex flex-col items-center justify-center shadow-lg border border-gray-600 backface-hidden hover:border-blue-400">
+                            <div class="w-28 h-28 mb-4"><svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-md">${p.svg}</svg></div>
+                            <h3 class="text-3xl text-yellow-300 font-bold">${p.name[currentLang]}</h3>
+                        </div>
+                        <div class="absolute w-full h-full bg-gray-800 p-4 rounded-xl flex flex-col items-center justify-center text-center shadow-lg border-2 border-blue-400 backface-hidden rotate-y-180">
+                            <h3 class="text-3xl text-yellow-300 mb-4 font-bold">${p.name[currentLang]}</h3>
+                            <p class="text-xl text-white font-bold break-keep leading-relaxed">${p.feature[currentLang]}</p>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        let matchConnections = [];
+        let currentlySelected = null;
+        let matchReqCount = 0;
+
+        function startMatchingGame(level) {
+            matchConnections = [];
+            currentlySelected = null;
+            document.getElementById('matching-svg').innerHTML = '';
+            
+            document.getElementById('level-subtitle').innerText = level === 2 ? uiText[currentLang].lv2 : uiText[currentLang].lv3;
+            const screen = document.getElementById('screen-matching');
+            screen.classList.remove('hidden'); screen.classList.add('flex');
+            document.getElementById('matching-desc').innerText = uiText[currentLang].matchDesc;
+            
+            const grid = document.getElementById('matching-grid');
+            grid.innerHTML = '';
+            
+            let cols = level === 2 ? ['image', 'name'] : ['image', 'name', 'feature'];
+            matchReqCount = level === 2 ? 8 : 16;
+            grid.className = `relative z-20 w-full h-full grid gap-4 sm:gap-8 grid-cols-${cols.length}`;
+            
+            document.getElementById('matching-info').innerText = `${uiText[currentLang].matchInfo}: 0 / ${matchReqCount}`;
+
+            cols.forEach((colType, colIndex) => {
+                const colDiv = document.createElement('div');
+                colDiv.className = "flex flex-col justify-between h-full gap-4";
+                const shuffled = [...planets].sort(() => Math.random() - 0.5);
+                
+                shuffled.forEach(p => {
+                    const item = document.createElement('div');
+                    item.className = "matching-item text-white";
+                    item.dataset.planet = p.id; item.dataset.col = colIndex; item.id = `m-item-${colIndex}-${p.id}`;
+                    
+                    if (colType === 'image') item.innerHTML = `<div class="w-14 h-14 pointer-events-none"><svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-md">${p.svg}</svg></div>`;
+                    else if (colType === 'name') item.innerHTML = `<span class="text-2xl lg:text-3xl text-yellow-300 font-bold pointer-events-none">${p.name[currentLang]}</span>`;
+                    else if (colType === 'feature') item.innerHTML = `<span class="text-sm lg:text-base font-bold break-keep px-2 pointer-events-none">${p.feature[currentLang]}</span>`;
+                    
+                    item.onclick = () => handleMatchClick(item);
+                    colDiv.appendChild(item);
+                });
+                grid.appendChild(colDiv);
+            });
+
+            if (!window.resizeBound) { window.addEventListener('resize', redrawLines); window.resizeBound = true; }
+        }
+
+        function handleMatchClick(el) {
+            const pId = el.dataset.planet;
+            const cIdx = parseInt(el.dataset.col);
+            const pData = planets.find(p => p.id === pId);
+
+            const maxConns = (currentLevel === 3 && cIdx === 1) ? 2 : 1;
+            const myConns = matchConnections.filter(c => c.startId === el.id || c.endId === el.id).length;
+
+            if (myConns >= maxConns) return; // 이미 완료된 카드
+
+            if (currentlySelected && currentlySelected.el === el) {
+                el.classList.remove('selected-glow');
+                currentlySelected = null; playSound('click'); return;
+            }
+
+            if (!currentlySelected) {
+                el.classList.add('selected-glow');
+                currentlySelected = { el, pId, cIdx };
+                playSound('click'); 
+                return;
+            }
+
+            const prev = currentlySelected;
+            const isAdj = Math.abs(prev.cIdx - cIdx) === 1; 
+            const isSame = prev.pId === pId; 
+
+            if (isAdj && isSame) {
+                const minCol = Math.min(prev.cIdx, cIdx);
+                const connId = `conn-${minCol}-${pId}`;
+                
+                if (!matchConnections.find(c => c.id === connId)) {
+                    matchConnections.push({ id: connId, startId: prev.el.id, endId: el.id });
+                    drawMatchLine(prev.el, el, connId);
+                    
+                    const maxCol = Math.max(prev.cIdx, cIdx);
+                    if (maxCol === 1) playTTS(pData.name[currentLang]);
+                    else if (maxCol === 2) playTTS(pData.feature[currentLang]);
+                    
+                    [prev.el, el].forEach(element => {
+                        const eIdx = parseInt(element.dataset.col);
+                        const eMax = (currentLevel === 3 && eIdx === 1) ? 2 : 1;
+                        const eConns = matchConnections.filter(c => c.startId === element.id || c.endId === element.id).length;
+                        
+                        element.classList.remove('selected-glow');
+                        if (eConns >= eMax) {
+                            element.classList.add('border-green-400', 'bg-green-900/30', 'matched');
+                        } else {
+                            element.classList.add('border-green-400', 'bg-green-900/30');
+                        }
+                    });
+                    
+                    playSound('match');
+                    document.getElementById('matching-info').innerText = `${uiText[currentLang].matchInfo}: ${matchConnections.length} / ${matchReqCount}`;
+                    
+                    if (matchConnections.length === matchReqCount) {
+                        currentlySelected = null;
+                        setTimeout(handleLevelClear, 800);
+                    } else {
+                        // 콤보: 3단계에서 중앙(이름)을 방금 연결했고, 아직 연결이 더 필요하다면 선택 유지
+                        if (currentLevel === 3) {
+                            const midEl = (prev.cIdx === 1) ? prev.el : ((cIdx === 1) ? el : null);
+                            if (midEl) {
+                                const midConns = matchConnections.filter(c => c.startId === midEl.id || c.endId === midEl.id).length;
+                                if (midConns < 2) {
+                                    midEl.classList.add('selected-glow');
+                                    currentlySelected = { el: midEl, pId: pId, cIdx: 1 };
+                                } else {
+                                    currentlySelected = null;
+                                }
+                            } else {
+                                currentlySelected = null;
+                            }
+                        } else {
+                            currentlySelected = null;
+                        }
+                    }
+                }
+            } else if (isAdj && !isSame) {
+                // 잘못된 짝 클릭 시
+                playSound('fail');
+                el.classList.add('bg-red-900/50', 'border-red-500');
+                setTimeout(() => el.classList.remove('bg-red-900/50', 'border-red-500'), 400);
+                
+                // 3단계 콤보 중 실수했을 때 중앙 이름 카드의 선택 유지
+                const prevConns = matchConnections.filter(c => c.startId === prev.el.id || c.endId === prev.el.id).length;
+                if (currentLevel === 3 && prev.cIdx === 1 && prevConns === 1) {
+                    // 선택 유지
+                } else {
+                    prev.el.classList.remove('selected-glow'); 
+                    currentlySelected = null;
+                }
+            } else {
+                // 인접하지 않은 열을 클릭 시 새롭게 선택
+                prev.el.classList.remove('selected-glow');
+                el.classList.add('selected-glow');
+                currentlySelected = { el, pId, cIdx };
+                playSound('click');
+            }
+        }
+
+        function drawMatchLine(el1, el2, id) {
+            const svg = document.getElementById('matching-svg');
+            const svgRect = svg.getBoundingClientRect();
+            const r1 = el1.getBoundingClientRect(); const r2 = el2.getBoundingClientRect();
+            
+            const y1 = r1.top - svgRect.top + r1.height / 2;
+            const y2 = r2.top - svgRect.top + r2.height / 2;
+            let x1, x2;
+            
+            if (parseInt(el1.dataset.col) < parseInt(el2.dataset.col)) {
+                x1 = r1.right - svgRect.left; x2 = r2.left - svgRect.left;
+            } else {
+                x1 = r1.left - svgRect.left; x2 = r2.right - svgRect.left;
+            }
+            
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('id', id); line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+            line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+            line.setAttribute('stroke', '#4ade80'); line.setAttribute('stroke-width', '6');
+            svg.appendChild(line);
+        }
+
+        function redrawLines() {
+            if (currentLevel !== 2 && currentLevel !== 3) return;
+            document.getElementById('matching-svg').innerHTML = '';
+            matchConnections.forEach(c => {
+                const e1 = document.getElementById(c.startId), e2 = document.getElementById(c.endId);
+                if (e1 && e2) drawMatchLine(e1, e2, c.id);
+            });
+        }
+
+        let mcPlanets = [];
+        let mcIndex = 0;
+
+        function startMultipleChoice() {
+            document.getElementById('level-subtitle').innerText = uiText[currentLang].lv4;
+            const screen = document.getElementById('screen-level4');
+            screen.classList.remove('hidden'); screen.classList.add('flex');
+            document.getElementById('mc-desc').innerText = uiText[currentLang].lv4Desc;
+            
+            mcPlanets = [...planets].sort(() => Math.random() - 0.5);
+            mcIndex = 0;
+            renderMultipleChoice();
+        }
+
+        function renderMultipleChoice() {
+            document.getElementById('mc-info').innerText = `진행: ${mcIndex} / 8`;
+            if (mcIndex >= 8) { handleLevelClear(); return; }
+            
+            const target = mcPlanets[mcIndex];
+            document.getElementById('mc-image-container').innerHTML = `<svg viewBox="0 0 100 100" class="w-full h-full">${target.svg}</svg>`;
+            
+            let options = [target.name[currentLang]];
+            let pool = planets.filter(p => p.id !== target.id).sort(() => Math.random() - 0.5);
+            options.push(pool[0].name[currentLang], pool[1].name[currentLang], pool[2].name[currentLang]);
+            options.sort(() => Math.random() - 0.5); 
+            
+            const optDiv = document.getElementById('mc-options');
+            optDiv.innerHTML = '';
+            options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = "py-4 bg-gray-700 hover:bg-gray-600 border-2 border-gray-600 rounded-xl text-white text-2xl font-bold transition transform active:scale-95";
+                btn.innerText = opt;
+                btn.onclick = () => {
+                    if (opt === target.name[currentLang]) {
+                        playTTS(opt);
+                        playSound('match');
+                        confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
+                        btn.classList.replace('bg-gray-700', 'bg-green-600');
+                        btn.classList.replace('border-gray-600', 'border-green-400');
+                        
+                        Array.from(optDiv.children).forEach(b => b.disabled = true);
+                        setTimeout(() => { mcIndex++; renderMultipleChoice(); }, 1200);
+                    } else {
+                        playSound('fail');
+                        btn.classList.replace('bg-gray-700', 'bg-red-600');
+                        btn.classList.replace('border-gray-600', 'border-red-400');
+                        setTimeout(() => {
+                            btn.classList.replace('bg-red-600', 'bg-gray-700');
+                            btn.classList.replace('border-red-400', 'border-gray-600');
+                        }, 500);
+                    }
+                };
+                optDiv.appendChild(btn);
+            });
+        }
+
+        let ddPlanets = [];
+        let ddIndex = 0;
+
+        function startDropdownQuiz() {
+            document.getElementById('level-subtitle').innerText = uiText[currentLang].lv5;
+            const screen = document.getElementById('screen-level5');
+            screen.classList.remove('hidden'); screen.classList.add('flex');
+            document.getElementById('dd-desc').innerText = uiText[currentLang].lv5Desc;
+            
+            document.getElementById('label-dd-name').innerText = uiText[currentLang].ddNameLabel;
+            document.getElementById('label-dd-feature').innerText = uiText[currentLang].ddFeatLabel;
+            document.getElementById('btn-dd-check').innerText = uiText[currentLang].btnCheck;
+
+            ddPlanets = [...planets].sort(() => Math.random() - 0.5);
+            ddIndex = 0;
+            
+            const nameSel = document.getElementById('dd-select-name');
+            const featSel = document.getElementById('dd-select-feature');
+            nameSel.innerHTML = `<option value="" disabled selected>${uiText[currentLang].ddNameDef}</option>`;
+            featSel.innerHTML = `<option value="" disabled selected>${uiText[currentLang].ddFeatDef}</option>`;
+            
+            [...planets].sort((a,b)=>Math.random()-0.5).forEach(p => {
+                nameSel.innerHTML += `<option value="${p.id}">${p.name[currentLang]}</option>`;
+                featSel.innerHTML += `<option value="${p.id}">${p.feature[currentLang]}</option>`;
+            });
+            
+            renderDropdownQuiz();
+        }
+
+        function renderDropdownQuiz() {
+            document.getElementById('dd-info').innerText = `진행: ${ddIndex} / 8`;
+            if (ddIndex >= 8) { handleLevelClear(); return; }
+            
+            const target = ddPlanets[ddIndex];
+            document.getElementById('dd-image-container').innerHTML = `<svg viewBox="0 0 100 100" class="w-full h-full">${target.svg}</svg>`;
+            document.getElementById('dd-select-name').value = "";
+            document.getElementById('dd-select-feature').value = "";
+            document.getElementById('btn-dd-check').disabled = false;
+        }
+
+        function checkDropdownAnswer() {
+            const target = ddPlanets[ddIndex];
+            const nameVal = document.getElementById('dd-select-name').value;
+            const featVal = document.getElementById('dd-select-feature').value;
+            
+            if (!nameVal || !featVal) { 
+                showModal(uiText[currentLang].waitTitle, uiText[currentLang].waitText, () => {}); 
+                return; 
+            }
+            
+            if (nameVal === target.id && featVal === target.id) {
+                document.getElementById('btn-dd-check').disabled = true;
+                playSound('match');
+                playTTS(target.name[currentLang]);
+                confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
+                setTimeout(() => { ddIndex++; renderDropdownQuiz(); }, 1500);
+            } else {
+                playSound('fail');
+                const btn = document.getElementById('btn-dd-check');
+                btn.classList.add('bg-red-600');
+                setTimeout(() => btn.classList.remove('bg-red-600'), 500);
+            }
+        }
+
+        let memoryCards = [], flippedCards = [];
+        let matchedPairs = 0, movesCount = 0, boardLocked = false;
+
+        function startMemoryGame(level) {
+            matchedPairs = 0; movesCount = 0; flippedCards = []; boardLocked = false;
+            
+            let titles = {6: uiText[currentLang].lv6, 7: uiText[currentLang].lv7, 8: uiText[currentLang].lv8};
+            document.getElementById('level-subtitle').innerText = titles[level];
+            
+            const screen = document.getElementById('screen-game');
+            screen.classList.remove('hidden'); screen.classList.add('flex');
+            document.getElementById('game-info').innerText = `${uiText[currentLang].gameInfo}: 0 / 8`;
+            document.getElementById('game-moves').innerText = `${uiText[currentLang].gameMoves}: 0`;
+            
+            let tA = level===6 ? 'image' : (level===7 ? 'feature' : 'image');
+            let tB = level===6 ? 'name' : (level===7 ? 'name' : 'feature');
+            
+            memoryCards = [];
+            planets.forEach(p => {
+                memoryCards.push({ id: p.id, type: tA, data: p });
+                memoryCards.push({ id: p.id, type: tB, data: p });
+            });
+            memoryCards.sort(() => Math.random() - 0.5);
+            
+            renderMemoryGrid();
+        }
+
+        function renderMemoryGrid() {
+            const grid = document.getElementById('card-grid');
+            grid.innerHTML = '';
+            
+            memoryCards.forEach((c, i) => {
+                let content = '';
+                if (c.type === 'image') content = `<div class="w-3/4 h-3/4"><svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-md">${c.data.svg}</svg></div>`;
+                else if (c.type === 'name') content = `<div class="text-2xl sm:text-4xl text-yellow-300 font-bold tracking-widest">${c.data.name[currentLang]}</div>`;
+                else if (c.type === 'feature') content = `<div class="text-sm sm:text-lg text-white font-bold break-keep text-center px-1">${c.data.feature[currentLang]}</div>`;
+                
+                const el = document.createElement('div');
+                el.className = "relative w-full h-full cursor-pointer transform-style-3d group perspective-1000";
+                el.innerHTML = `
+                    <div class="card-inner w-full h-full transform-style-3d relative">
+                        <div class="absolute inset-0 bg-gradient-to-br from-indigo-800 to-purple-900 border-2 border-indigo-500 rounded-xl flex items-center justify-center backface-hidden shadow-lg group-hover:bg-indigo-700 transition">
+                            <span class="text-3xl sm:text-5xl opacity-50">🌟</span>
+                        </div>
+                        <div class="absolute inset-0 bg-gray-800 border-2 border-blue-400 rounded-xl flex items-center justify-center backface-hidden rotate-y-180 shadow-xl overflow-hidden p-1">
+                            ${content}
+                        </div>
+                    </div>
+                `;
+                el.onclick = () => flipMemoryCard(el, c);
+                grid.appendChild(el);
+            });
+        }
+
+        function flipMemoryCard(el, cardData) {
+            if (boardLocked) return;
+            const inner = el.querySelector('.card-inner');
+            if (inner.style.transform === 'rotateY(180deg)') return;
+            
+            playSound('flip');
+            inner.style.transform = 'rotateY(180deg)';
+            flippedCards.push({ el, data: cardData });
+            
+            if (flippedCards.length === 2) {
+                boardLocked = true; movesCount++;
+                document.getElementById('game-moves').innerText = `${uiText[currentLang].gameMoves}: ${movesCount}`;
+                checkMemoryMatch();
+            }
+        }
+
+        function checkMemoryMatch() {
+            const [c1, c2] = flippedCards;
+            if (c1.data.id === c2.data.id) {
+                playSound('match'); matchedPairs++;
+                document.getElementById('game-info').innerText = `${uiText[currentLang].gameInfo}: ${matchedPairs} / 8`;
+                c1.el.querySelector('.rotate-y-180').classList.add('matched-glow', 'border-green-400');
+                c2.el.querySelector('.rotate-y-180').classList.add('matched-glow', 'border-green-400');
+                
+                if (c1.data.type === 'name' || c2.data.type === 'name') {
+                    playTTS(c1.data.data.name[currentLang]);
+                } else {
+                    playTTS(c1.data.data.feature[currentLang]);
+                }
+
+                flippedCards = []; boardLocked = false;
+                if (matchedPairs === 8) setTimeout(handleLevelClear, 800);
+            } else {
+                playSound('fail');
+                setTimeout(() => {
+                    c1.el.querySelector('.card-inner').style.transform = '';
+                    c2.el.querySelector('.card-inner').style.transform = '';
+                    flippedCards = []; boardLocked = false;
+                }, 1000);
+            }
+        }
+
+        let lv9Phase = 1; // 1: Image, 2: Name, 3: Feature
+        let lv9Matched = 0;
+        let lv9Selected = null;
+
+        function startLevel9() {
+            lv9Phase = 1;
+            document.getElementById('level-subtitle').innerText = uiText[currentLang].lv9;
+            const screen = document.getElementById('screen-level9');
+            screen.classList.remove('hidden'); screen.classList.add('flex');
+            
+            initLevel9Board();
+            renderLevel9Phase();
+        }
+
+        function initLevel9Board() {
+            const board = document.getElementById('lv9-board');
+            board.innerHTML = '';
+            
+            // Sun slot
+            const sunEl = document.createElement('div');
+            sunEl.className = "flex-shrink-0 relative w-[220px] h-[220px] -ml-8 rounded-full flex items-center justify-center mr-8";
+            sunEl.style.background = "radial-gradient(circle, #fff59d 0%, #fbc02d 40%, #e65100 100%)";
+            sunEl.style.boxShadow = "0 0 50px rgba(255, 165, 0, 0.8)";
+            sunEl.innerHTML = `<span class="text-white font-bold text-4xl drop-shadow-md">${uiText[currentLang].sun}</span>`;
+            board.appendChild(sunEl);
+
+            const sizes = {
+                'mercury': 'w-10 h-10', 'venus': 'w-16 h-16', 'earth': 'w-20 h-20', 'mars': 'w-14 h-14',
+                'jupiter': 'w-36 h-36', 'saturn': 'w-[160px] h-[160px]', 
+                'uranus': 'w-24 h-24', 'neptune': 'w-24 h-24'
+            };
+
+            planets.forEach(p => {
+                const wrapper = document.createElement('div');
+                wrapper.className = "relative flex flex-col items-center justify-center flex-shrink-0 mx-3 h-full gap-4 min-w-[140px]";
+                
+                // Name Slot
+                const nameSlot = document.createElement('div');
+                nameSlot.className = "w-28 h-10 border-2 border-dashed border-gray-500 bg-gray-800/50 rounded-lg flex items-center justify-center opacity-0 transition-opacity cursor-pointer";
+                nameSlot.id = `slot-name-${p.id}`;
+                nameSlot.dataset.target = p.id;
+                nameSlot.onclick = function() { handleSlotClick9(this); };
+                
+                // Image Slot
+                const imgSlot = document.createElement('div');
+                imgSlot.className = `border-2 border-dashed border-gray-500 bg-gray-800/50 rounded-full flex items-center justify-center ${sizes[p.id]} opacity-0 transition-opacity cursor-pointer`;
+                imgSlot.id = `slot-image-${p.id}`;
+                imgSlot.dataset.target = p.id;
+                imgSlot.onclick = function() { handleSlotClick9(this); };
+                
+                // Feature Slot
+                const featSlot = document.createElement('div');
+                featSlot.className = "w-36 h-24 border-2 border-dashed border-gray-500 bg-gray-800/50 rounded-lg flex items-center justify-center text-center p-2 opacity-0 transition-opacity cursor-pointer";
+                featSlot.id = `slot-feature-${p.id}`;
+                featSlot.dataset.target = p.id;
+                featSlot.onclick = function() { handleSlotClick9(this); };
+
+                wrapper.appendChild(nameSlot);
+                wrapper.appendChild(imgSlot);
+                wrapper.appendChild(featSlot);
+                board.appendChild(wrapper);
+            });
+        }
+
+        function renderLevel9Phase() {
+            lv9Matched = 0;
+            lv9Selected = null;
+            const pool = document.getElementById('lv9-pool');
+            pool.innerHTML = '';
+            
+            let descKey = lv9Phase === 1 ? 'lv9Ph1' : (lv9Phase === 2 ? 'lv9Ph2' : 'lv9Ph3');
+            document.getElementById('lv9-desc').innerText = uiText[currentLang][descKey];
+            document.getElementById('lv9-info').innerText = `진행: ${lv9Matched} / 8`;
+
+            const slotPrefix = lv9Phase === 1 ? 'slot-image-' : (lv9Phase === 2 ? 'slot-name-' : 'slot-feature-');
+            const items = [...planets].sort(() => Math.random() - 0.5);
+
+            planets.forEach(p => {
+                const slot = document.getElementById(`${slotPrefix}${p.id}`);
+                if(slot) {
+                    slot.classList.remove('opacity-0', 'border-transparent', 'bg-transparent');
+                    slot.classList.add('drop-zone', 'border-dashed', 'border-gray-500', 'bg-gray-800/50', 'hover:border-yellow-400');
+                    if (lv9Phase > 1) {
+                        // Previous slots should be fully visible without borders
+                        const prevSlotPrefix = (lv9Phase === 2) ? 'slot-image-' : 'slot-name-';
+                        const prevSlot = document.getElementById(`${prevSlotPrefix}${p.id}`);
+                        if (prevSlot) {
+                            prevSlot.classList.remove('border-dashed', 'border-gray-500', 'bg-gray-800/50', 'hover:border-yellow-400', 'drop-zone');
+                            prevSlot.classList.add('border-transparent');
+                        }
+                    }
+                }
+            });
+
+            items.forEach(p => {
+                const el = document.createElement('div');
+                el.className = "pool-item bg-gray-700 border-2 border-blue-400 rounded-xl p-2 cursor-pointer shadow-lg flex items-center justify-center select-none z-30 transition-transform hover:scale-105 active:scale-95";
+                el.dataset.id = p.id;
+                
+                if (lv9Phase === 1) {
+                    el.innerHTML = `<svg viewBox="0 0 100 100" class="w-16 h-16 drop-shadow-md pointer-events-none">${p.svg}</svg>`;
+                } else if (lv9Phase === 2) {
+                    el.innerHTML = `<span class="text-xl text-yellow-300 font-bold pointer-events-none px-4 py-1">${p.name[currentLang]}</span>`;
+                } else if (lv9Phase === 3) {
+                    el.innerHTML = `<span class="text-sm font-bold text-white break-keep pointer-events-none px-2 max-w-[130px] text-center">${p.feature[currentLang]}</span>`;
+                }
+
+                el.onclick = function() { handlePoolClick9(this); };
+                pool.appendChild(el);
+            });
+        }
+
+        function handlePoolClick9(el) {
+            playSound('click');
+            if (lv9Selected) {
+                lv9Selected.classList.remove('ring-4', 'ring-yellow-400', 'scale-110');
+            }
+            if (lv9Selected === el) {
+                lv9Selected = null; // 선택 해제
+                return;
+            }
+            lv9Selected = el;
+            lv9Selected.classList.add('ring-4', 'ring-yellow-400', 'scale-110');
+        }
+
+        function handleSlotClick9(slot) {
+            if (!lv9Selected || !slot.classList.contains('drop-zone')) return;
+
+            if (slot.dataset.target === lv9Selected.dataset.id) {
+                playSound('match');
+                if (lv9Phase === 2) playTTS(planets.find(p=>p.id===lv9Selected.dataset.id).name[currentLang]);
+                else if (lv9Phase === 3) playTTS(planets.find(p=>p.id===lv9Selected.dataset.id).feature[currentLang]);
+
+                lv9Selected.classList.remove('pool-item', 'ring-4', 'ring-yellow-400', 'scale-110', 'bg-gray-700', 'border-2', 'border-blue-400', 'hover:scale-105', 'shadow-lg', 'cursor-pointer');
+                lv9Selected.classList.add('bg-transparent', 'w-full', 'h-full');
+                lv9Selected.onclick = null;
+                
+                if(lv9Phase === 1) {
+                    const svg = lv9Selected.querySelector('svg');
+                    if(svg) {
+                        svg.classList.remove('w-16', 'h-16');
+                        svg.classList.add('w-full', 'h-full');
+                    }
+                }
+
+                slot.appendChild(lv9Selected);
+                slot.classList.remove('drop-zone', 'border-dashed', 'border-gray-500', 'bg-gray-800/50', 'hover:border-yellow-400', 'cursor-pointer');
+                slot.classList.add('border-transparent');
+                
+                lv9Matched++;
+                lv9Selected = null;
+                document.getElementById('lv9-info').innerText = `진행: ${lv9Matched} / 8`;
+                
+                if (lv9Matched === 8) {
+                    confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+                    setTimeout(() => {
+                        if (lv9Phase < 3) {
+                            lv9Phase++;
+                            renderLevel9Phase();
+                        } else {
+                            handleLevelClear();
+                        }
+                    }, 2000);
+                }
+            } else {
+                playSound('fail');
+                slot.classList.add('bg-red-900/50', 'border-red-500');
+                setTimeout(() => slot.classList.remove('bg-red-900/50', 'border-red-500'), 400);
+            }
+        }
+
+        // Shared Modal & Clear Logic
+        function showModal(title, text, action) {
+            const modal = document.getElementById('message-modal');
+            const content = document.getElementById('modal-content');
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-text').innerHTML = text;
+            
+            const btn = document.getElementById('modal-btn');
+            btn.onclick = () => {
+                content.classList.replace('scale-100', 'scale-95');
+                content.classList.replace('opacity-100', 'opacity-0');
+                setTimeout(() => { 
+                    modal.classList.add('hidden'); 
+                    if (action) action(); 
+                }, 300);
+            };
+
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                content.classList.replace('scale-95', 'scale-100');
+                content.classList.replace('opacity-0', 'opacity-100');
+            }, 10);
+        }
+
+        function handleLevelClear() {
+            playSound('win');
+            if (currentLevel >= 4 && currentLevel <= 5) confetti({ particleCount: 150, spread: 100, origin: { y: 0.6 } });
+            
+            if (currentLevel < maxLevel) {
+                let lvTitle = currentLevel + uiText[currentLang].clearLvTitle;
+                if(currentLang === 'en') lvTitle = "Level " + currentLevel + " Cleared! ✨";
+                showModal(lvTitle, uiText[currentLang].clearLvText, () => goNext());
+            } else {
+                showModal(uiText[currentLang].clearAllTitle, uiText[currentLang].clearAllText, () => goToLevel(-1));
+            }
+        }
+
+    </script>
+</body>
+</html>
